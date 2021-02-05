@@ -1,0 +1,389 @@
+import collections
+import operator
+import queue
+from queue import *
+from collections import defaultdict
+import heapq
+from heapq import *
+from operator import add, sub, mul
+import sys
+import time
+from itertools import groupby
+
+
+
+
+#Graph ADT gotten from https://runestone.academy/runestone/books/published/pythonds/Graphs/TheGraphAbstractDataType.html
+
+#Tracker Class for SCC
+class Tracker(object):
+  def __init__(self):
+    self.current_time = 0
+    self.current_source = None
+    self.leader = {}
+    self.finish_time = {}
+    self.explored = set()
+
+#declaration of stack method
+class Stack:
+     def __init__(self):
+         self.items = []
+
+     def is_empty(self):
+         return self.items == []
+
+     def push(self, item):
+         self.items.append(item)
+
+     def pop(self):
+         return self.items.pop()
+
+     def peek(self):
+         return self.items[len(self.items)-1]
+
+     def size(self):
+         return len(self.items)
+
+#declaration of queue method
+class Queue:
+    def __init__(self):
+        self.items = []
+
+    def isEmpty(self):
+        return self.items == []
+
+    def enqueue(self, item):
+        self.items.insert(0,item)
+
+    def dequeue(self):
+        return self.items.pop()
+
+    def size(self):
+        return len(self.items)
+
+#vertex class and methods
+class Vertex:
+  def __init__(self,key):
+      self.id = key
+      self.connectedTo = {}
+  def addNeighbor(self,nbr,weight=0):
+      self.connectedTo[nbr] = weight
+  def getConnections(self):
+      return self.connectedTo.keys()
+  def getId(self):
+      return self.id
+  def getWeight(self,nbr):
+      return self.connectedTo[nbr]
+        
+#Graph ADT
+class Graph:
+  def __init__(self, graph_repr=None): # def __init__(self):
+    self.nodes = set()
+    self.edges = defaultdict(list)
+    self.distances = {}
+
+    if graph_repr is None:
+      self.vertList = {}
+        
+    else:
+      self.vertList = graph_repr
+      #self.vertList = {}
+      #self.numVertices = 0
+  
+  def addVertex(self,key):
+        self.numVertices = self.numVertices + 1
+        newVertex = Vertex(key)
+        self.vertList[key] = newVertex
+        return newVertex
+  
+  def getVertex(self,n):
+        if n in self.vertList:
+            return self.vertList[n]
+        else:
+            return None
+  
+  def addEdge(self,f,t,weight=0):
+        if f not in self.vertList:
+            nv = self.addVertex(f)
+        if t not in self.vertList:
+            nv = self.addVertex(t)
+        self.vertList[f].addNeighbor(self.vertList[t], weight)\
+  
+
+  def add_node(self, value):
+    self.nodes.add(value)
+
+  def getVertices(self):
+        return self.vertList.keys()
+
+  def __iter__(self):
+    return iter(self.vertList.values())
+
+  def __contains__(self,n):
+    return n in self.vertList  
+  
+  def dfs(self, start, visited=None):
+    if visited is None:
+        visited = set()
+    visited.add(start)
+    for next in self[start] - visited:
+        Graph.dfs(self, next, visited)
+    return visited
+
+  def bfs(self, start):
+    visited, queue = set(), [start]
+    p = []
+    while queue:
+      vertex = queue.pop(0)
+      if vertex not in visited:
+        visited.add(vertex)
+        p.append(vertex)
+        queue.extend(self.getVertices() - visited)
+    return p
+
+  def dfs_paths(graph, start, goal):
+    stack = [(start, [start])]
+    while stack:
+        (vertex, path) = stack.pop()
+        for next in graph[vertex] - set(path):
+            if next == goal:
+                yield path + [next]
+            else:
+                stack.append((next, path + [next]))
+
+  def bfs_paths(graph, start, goal):
+    queue = [(start, [start])]
+    while queue:
+        (vertex, path) = queue.pop(0)
+        for next in graph[vertex] - set(path):
+            if next == goal:
+                yield path + [next]
+            else:
+                queue.append((next, path + [next]))
+
+  def dijkstra(graph, initial):
+    visited = {initial: 0}
+    path = {}
+
+    nodes = set(graph.nodes)
+
+    while nodes: 
+      min_node = None
+      for node in nodes:
+        if node in visited:
+          if min_node is None:
+            min_node = node
+          elif visited[node] < visited[min_node]:
+            min_node = node
+
+      if min_node is None:
+        break
+
+      nodes.remove(min_node)
+      current_weight = visited[min_node]
+
+      for edge in graph.edges[min_node]:
+        weight = current_weight + graph.distance[(min_node, edge)]
+        if edge not in visited or weight < visited[edge]:
+          visited[edge] = weight
+          path[edge] = min_node
+
+    return visited, path
+
+  def minimum_tree( nodes, edges ):
+    conn = defaultdict( list )
+    for n1,n2,c in edges:
+      conn[ n1 ].append( (c, n1, n2) )
+      conn[ n2 ].append( (c, n2, n1) )
+  
+    mst = []
+    used = set( [nodes[ 0 ]] )
+    usable_edges = conn[ nodes[0] ][:]
+    heapify( usable_edges )
+  
+    while usable_edges:
+      cost, n1, n2 = heappop( usable_edges )
+      if n2 not in used:
+        used.add( n2 )
+        mst.append( ( n1, n2, cost ) )
+  
+        for e in conn[ n2 ]:
+          if e[ 2 ] not in used:
+            heappush( usable_edges, e )
+    return mst
+
+def scc(graph):
+  out = defaultdict(list)
+  tracker1 = Tracker()
+  tracker2 = Tracker()
+  nodes = set()
+  reversed_graph = graph_reverse(graph)
+  for tail, head_list in graph.items():
+    nodes |= set(head_list)
+    nodes.add(tail)
+  nodes = sorted(list(nodes), reverse=True)
+  dagDFS_loop(reversed_graph, nodes, tracker1)
+  sorted_nodes = sorted(tracker1.finish_time,
+                          key=tracker1.finish_time.get, reverse=True)
+  dagDFS_loop(graph, sorted_nodes, tracker2)
+  for lead, vertex in groupby(sorted(tracker2.leader, key=tracker2.leader.get),
+                                key=tracker2.leader.get):
+      out[lead] = list(vertex)
+  return out
+
+
+def dagDFS(graph_dict, node, tracker):
+  tracker.explored.add(node)
+  tracker.leader[node] = tracker.current_source
+  for head in graph_dict[node]:
+    if head not in tracker.explored:
+      dagDFS(graph_dict, head, tracker)
+  tracker.current_time += 1
+  tracker.finish_time[node] = tracker.current_time
+
+def dagDFS_loop(graph_dict, nodes, tracker):
+  for node in nodes:
+    if node not in tracker.explored:
+      tracker.current_source = node
+      dagDFS(graph_dict, node, tracker)
+
+def graph_reverse(graph):
+  reversed_graph = defaultdict(list)
+  for tail, head_list in graph.items():
+    for head in head_list:
+      reversed_graph[head].append(tail)
+  return reversed_graph   
+
+
+def findSCC(graph):
+  start = time.time()
+  t1 = time.time() - start
+  groups = scc(graph)
+  t2 = time.time() - start
+  top_5 = heapq.nlargest(5, groups, key=lambda x: len(groups[x]))
+  result = []
+  for i in range(5):
+    try:
+      result.append(len(groups[top_5[i]]))
+    except:
+      result.append(0)
+  return result, groups
+
+def q12():
+  g = {     'A': set(['B','E','F']),
+            'B': set(['A','C','F']),
+            'C': set(['B','D','G']),
+            'D': set(['G']),
+            'E': set(['A','F','I']),
+            'F': set(['A','B','E']),
+            'G': set(['C','D','J']),
+            'I': set(['E','F','J','M']),
+            'J': set(['I','G']),
+            'M': set(['I','N']),
+            'N': set(['M']),
+            'H': set(['K','L']),
+            'K': set(['H','L','O']),
+            'L': set(['H','K','P']),
+            'O': set(['K']),
+            'P': set(['L'])  }
+  return g
+
+def dag():
+  graph = {
+         'A': set(['B']),
+         'B': set(['D', 'C', 'E']),
+         'C': set(['F']),
+         'D': set(),
+         'E': set(['B', 'F', 'G']),
+         'F': set(['C','H']),
+         'G': set(['H', 'J']),
+         'H': set(['K']),
+         'I': set('G'),
+         'J': set(['I']),
+         'K': set(['L']),
+         'L': set(['J'])
+          }
+
+  return graph
+
+
+
+def weightedGraph():
+  graph = Graph()
+
+  graph.nodes = {'A','B','C','D','E', 'F', 'G', 'H', 'I'}
+
+  graph.edges = {'A': ['B', 'C', 'D'], 'B':['C', 'F', 'H'],
+                 'C':['B', 'F', 'D', 'E'], 'D':['C', 'I', 'E'],
+                 'E': ['C', 'D', 'F', 'G',], 'F': ['C', 'E', 'B', 'G', 'H',],
+                 'G': ['F', 'E', 'H', 'I'], 'H':['B', 'F', 'G', 'I'], 'I': ['D', 'H', 'G']}
+
+  graph.distance = {('A', 'B'):22, ('A', 'C'):9, ('A', 'D'):12,
+                    ('B', 'C'):35, ('B', 'F'):36, ('B', 'H'):34,
+                    ('C', 'F'):42, ('C', 'D'):4, ('C', 'E'):65, ('C', 'B'):35,
+                    ('D', 'E'):33, ('D', 'I'):30, ('D', 'C'):4,
+                    ('E', 'F'):18, ('E', 'G'):23, ('E', 'C'):65, ('E', 'D'):33,
+                    ('F', 'H'):24, ('F', 'G'):39, ('F', 'C'):42, ('F', 'E'):18, ('F', 'B'):36,
+                    ('G', 'H'):25, ('G', 'I'):21, ('G', 'F'):39, ('G', 'E'):23,
+                    ('H', 'B'):34, ('H', 'I'):19, ('H', 'F'):24, ('H', 'G'):25,
+                    ('I', 'D'):30, ('I', 'H'): 19, ('I', 'G'):21,
+                   }
+
+  return graph
+
+
+def mTreeGraph():
+  nodes = list("ABCDEFGHI")
+  edges = [("A", "B", 22), ("A", "C", 9), ('A', 'D', 12),
+          ("B", "C", 35), ("B", "F", 36), ("B", "H", 34),
+          ("C", "F", 42), ('C', 'D', 4), ('C', 'E', 65),
+          ("D", "E", 33), ("D", "I", 30),
+          ("E", "F", 18), ("E", "G", 23),
+          ("F", "H", 24), ('F', 'G', 39),
+          ('G', 'H', 25), ('G', 'I', 21), 
+          ('H', 'I', 19)]
+
+  return list(nodes), list(edges)
+
+
+
+def main():
+  graph1 = q12()
+  graph2 = weightedGraph()
+  graph3 = dag()
+ 
+ 
+ 
+  nodes = mTreeGraph()[0]
+  edges = mTreeGraph()[1]
+
+  print('Strongly Connected Compontents of DAG')
+  count, components = findSCC(graph3)
+  for key in components:
+    print(components[key])
+
+
+
+  print('\nBFS: ')
+  print(g.bfs('A')) #WORKS
+
+  print('\n\nDFS: ')
+  print(Graph.dfs(graph1, 'A')) #WORKS
+  
+  print('\n\nDFS PATH: ')
+  print(list(Graph.dfs_paths(graph1,'A','B'))) #WORKS simply change ' ', ' ' to check a path
+  print('\n\nBFS PATH: ')
+  print(list(Graph.bfs_paths(graph1,'A','B'))) #WORKS simply change ' ', ' ' to check a path
+
+
+  print('\n\nDijkstra')
+  v, path = Graph.dijkstra(graph2, 'A')
+  print('Visited: ', v)
+  print('Path :', path)
+
+  print('\n\nMinimum Spanning Tree')
+  print('Minimum Tree: ', Graph.minimum_tree(nodes, edges))
+
+
+if __name__ == "__main__":
+    main()
